@@ -1,14 +1,27 @@
 # Pizza Order Tracker - workshop stack
 #
-# Compose reads variable values (DASH0_AUTH_TOKEN, DASH0_ENDPOINT, SLOW_KITCHEN,
-# NO_DRIVERS, ...) from the `.env` file that sits NEXT TO THIS FILE, i.e.
-# `pizza-app/.env`. Create it from inside pizza-app/:
+# Compose reads variable values (DASH0_AUTH_TOKEN, DASH0_OTLP_ENDPOINT,
+# SLOW_KITCHEN, NO_DRIVERS, ...) from the `.env` file that sits NEXT TO THIS
+# FILE, i.e. `pizza-app/.env`. Create it from inside pizza-app/:
 #
 #     cp .env.template .env
 #
 # An `.env` anywhere else (the repo root, for example) is NOT read.
 
 services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    command:
+      - "--config=/etc/otel-collector-config.yaml"
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    environment:
+      - DASH0_OTLP_ENDPOINT=${DASH0_OTLP_ENDPOINT}
+      - DASH0_AUTH_TOKEN=${DASH0_AUTH_TOKEN}
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+
   order-service:
     build: ./order-service
     ports:
@@ -16,6 +29,8 @@ services:
     environment:
       - KITCHEN_SERVICE_URL=http://kitchen-service:3001
       - DELIVERY_SERVICE_URL=http://delivery-service:3002
+      - OTEL_SERVICE_NAME=order-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
     healthcheck:
       test:
         - CMD
@@ -31,6 +46,8 @@ services:
         condition: service_healthy
       delivery-service:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
 
   kitchen-service:
     build: ./kitchen-service
@@ -38,6 +55,8 @@ services:
       - "3001:3001"
     environment:
       - SLOW_KITCHEN=${SLOW_KITCHEN:-false}
+      - OTEL_SERVICE_NAME=kitchen-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
     healthcheck:
       test:
         - CMD
@@ -48,6 +67,9 @@ services:
       timeout: 3s
       retries: 12
       start_period: 5s
+    depends_on:
+      otel-collector:
+        condition: service_started
 
   delivery-service:
     build: ./delivery-service
@@ -55,6 +77,8 @@ services:
       - "3002:3002"
     environment:
       - NO_DRIVERS=${NO_DRIVERS:-false}
+      - OTEL_SERVICE_NAME=delivery-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
     healthcheck:
       test:
         - CMD
@@ -65,6 +89,9 @@ services:
       timeout: 3s
       retries: 12
       start_period: 5s
+    depends_on:
+      otel-collector:
+        condition: service_started
 
   frontend:
     build: ./frontend

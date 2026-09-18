@@ -62,7 +62,7 @@ All three Node services are instrumented with OpenTelemetry auto-instrumentation
 local OpenTelemetry Collector, which forwards them to Dash0.
 
 1. Create `pizza-app/.env` from the template (`cp .env.template .env`) and fill
-   in `DASH0_AUTH_TOKEN` and `DASH0_ENDPOINT` for your Dash0 organization.
+   in `DASH0_AUTH_TOKEN` and `DASH0_OTLP_ENDPOINT` for your Dash0 organization.
 2. Run `docker compose up` as usual — the `otel-collector` service starts
    alongside the app and each Node service ships its telemetry to it over
    OTLP/HTTP (`otel-collector:4318`).
@@ -71,7 +71,7 @@ local OpenTelemetry Collector, which forwards them to Dash0.
    pizza order shows up in Dash0 as one connected trace.
 
 The Dash0 token and endpoint are only ever referenced via environment
-variables (`${DASH0_AUTH_TOKEN}`, `${DASH0_ENDPOINT}`) — they are never
+variables (`${DASH0_AUTH_TOKEN}`, `${DASH0_OTLP_ENDPOINT}`) — they are never
 written into a committed file.
 
 ## Failure Modes You Can Switch On

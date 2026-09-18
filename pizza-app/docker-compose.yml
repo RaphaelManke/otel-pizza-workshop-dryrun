@@ -1,8 +1,8 @@
 # Pizza Order Tracker - workshop stack
 #
-# Compose reads variable values (DASH0_AUTH_TOKEN, DASH0_ENDPOINT, SLOW_KITCHEN,
-# NO_DRIVERS, ...) from the `.env` file that sits NEXT TO THIS FILE, i.e.
-# `pizza-app/.env`. Create it from inside pizza-app/:
+# Compose reads variable values (DASH0_AUTH_TOKEN, DASH0_OTLP_ENDPOINT,
+# SLOW_KITCHEN, NO_DRIVERS, ...) from the `.env` file that sits NEXT TO THIS
+# FILE, i.e. `pizza-app/.env`. Create it from inside pizza-app/:
 #
 #     cp .env.template .env
 #
@@ -16,7 +16,7 @@ services:
     volumes:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
     environment:
-      - DASH0_ENDPOINT=${DASH0_ENDPOINT}
+      - DASH0_OTLP_ENDPOINT=${DASH0_OTLP_ENDPOINT}
       - DASH0_AUTH_TOKEN=${DASH0_AUTH_TOKEN}
     ports:
       - "4317:4317"

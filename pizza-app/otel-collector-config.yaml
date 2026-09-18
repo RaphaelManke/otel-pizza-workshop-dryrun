@@ -10,8 +10,8 @@ processors:
   batch: {}
 
 exporters:
-  otlp/dash0:
-    endpoint: ${env:DASH0_ENDPOINT}
+  otlphttp/dash0:
+    endpoint: ${env:DASH0_OTLP_ENDPOINT}
     headers:
       Authorization: "Bearer ${env:DASH0_AUTH_TOKEN}"
 
@@ -20,12 +20,12 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlp/dash0]
+      exporters: [otlphttp/dash0]
     metrics:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlp/dash0]
+      exporters: [otlphttp/dash0]
     logs:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlp/dash0]
+      exporters: [otlphttp/dash0]

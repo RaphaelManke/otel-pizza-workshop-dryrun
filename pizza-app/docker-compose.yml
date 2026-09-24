@@ -8,14 +8,35 @@
 #
 # An `.env` anywhere else (the repo root, for example) is NOT read.
 
+# OpenTelemetry settings shared by the three Node services. Each service merges
+# this block with `<<: *otel` and adds its own OTEL_SERVICE_NAME.
+#
+# NODE_OPTIONS loads the OpenTelemetry auto-instrumentation before the app's own
+# code runs, so the Express server, the inbound HTTP requests and the outbound
+# axios calls are traced without any change to index.js.
+x-otel: &otel
+  NODE_OPTIONS: --require @opentelemetry/auto-instrumentations-node/register
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${DASH0_ENDPOINT:-https://ingress.us-west-2.aws.dash0.com:4317}
+  OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+  OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Bearer ${DASH0_AUTH_TOKEN:-}"
+  OTEL_RESOURCE_ATTRIBUTES: service.namespace=pizza-app,deployment.environment.name=${DASH0_ENVIRONMENT:-workshop}
+  # Skip the AWS/GCP/Azure detectors: outside a cloud they each probe a metadata
+  # server that isn't there and print a warning on every startup.
+  OTEL_NODE_RESOURCE_DETECTORS: env,host,os,process,serviceinstance,container
+  # Filesystem, DNS and socket calls would otherwise add dozens of spans per
+  # order and bury the ones you care about.
+  OTEL_NODE_DISABLED_INSTRUMENTATIONS: fs,dns,net
+
 services:
   order-service:
     build: ./order-service
     ports:
       - "3000:3000"
     environment:
-      - KITCHEN_SERVICE_URL=http://kitchen-service:3001
-      - DELIVERY_SERVICE_URL=http://delivery-service:3002
+      <<: *otel
+      OTEL_SERVICE_NAME: order-service
+      KITCHEN_SERVICE_URL: http://kitchen-service:3001
+      DELIVERY_SERVICE_URL: http://delivery-service:3002
     healthcheck:
       test:
         - CMD
@@ -37,7 +58,9 @@ services:
     ports:
       - "3001:3001"
     environment:
-      - SLOW_KITCHEN=${SLOW_KITCHEN:-false}
+      <<: *otel
+      OTEL_SERVICE_NAME: kitchen-service
+      SLOW_KITCHEN: ${SLOW_KITCHEN:-false}
     healthcheck:
       test:
         - CMD
@@ -54,7 +77,9 @@ services:
     ports:
       - "3002:3002"
     environment:
-      - NO_DRIVERS=${NO_DRIVERS:-false}
+      <<: *otel
+      OTEL_SERVICE_NAME: delivery-service
+      NO_DRIVERS: ${NO_DRIVERS:-false}
     healthcheck:
       test:
         - CMD

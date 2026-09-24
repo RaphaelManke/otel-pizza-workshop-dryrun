@@ -20,6 +20,12 @@ x-otel: &otel
   OTEL_EXPORTER_OTLP_PROTOCOL: grpc
   OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Bearer ${DASH0_AUTH_TOKEN:-}"
   OTEL_RESOURCE_ATTRIBUTES: service.namespace=pizza-app,deployment.environment.name=${DASH0_ENVIRONMENT:-workshop}
+  # Skip the AWS/GCP/Azure detectors: outside a cloud they each probe a metadata
+  # server that isn't there and print a warning on every startup.
+  OTEL_NODE_RESOURCE_DETECTORS: env,host,os,process,serviceinstance,container
+  # Filesystem, DNS and socket calls would otherwise add dozens of spans per
+  # order and bury the ones you care about.
+  OTEL_NODE_DISABLED_INSTRUMENTATIONS: fs,dns,net
 
 services:
   order-service:

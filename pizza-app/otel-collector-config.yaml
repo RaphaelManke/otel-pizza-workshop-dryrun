@@ -1,0 +1,64 @@
+# OpenTelemetry Collector configuration for the pizza app.
+#
+# The three Node services send OTLP to this Collector (host `otel-collector`,
+# port 4318). The Collector enriches the telemetry and forwards it to Dash0.
+# It is the only component that holds the Dash0 auth token.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  resourcedetection:
+    detectors: [env, system]
+    system:
+      resource_attributes:
+        host.id:
+          enabled: false
+    override: false
+
+  resource:
+    attributes:
+      - key: deployment.environment.name
+        value: ${env:DASH0_ENVIRONMENT}
+        action: upsert
+      - key: vcs.repository.url.full
+        value: ${env:VCS_REPOSITORY_URL}
+        action: upsert
+
+  batch:
+    send_batch_size: 1024
+    timeout: 5s
+
+exporters:
+  otlp/dash0:
+    endpoint: ${env:DASH0_ENDPOINT}
+    headers:
+      Authorization: Bearer ${env:DASH0_AUTH_TOKEN}
+
+  # Uncomment the debug exporter below (and add it to the pipelines) to print
+  # telemetry to `docker compose logs otel-collector` while troubleshooting.
+  # debug:
+  #   verbosity: detailed
+
+service:
+  telemetry:
+    logs:
+      level: info
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [resourcedetection, resource, batch]
+      exporters: [otlp/dash0]
+    metrics:
+      receivers: [otlp]
+      processors: [resourcedetection, resource, batch]
+      exporters: [otlp/dash0]
+    logs:
+      receivers: [otlp]
+      processors: [resourcedetection, resource, batch]
+      exporters: [otlp/dash0]

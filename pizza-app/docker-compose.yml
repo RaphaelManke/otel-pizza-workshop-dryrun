@@ -8,14 +8,44 @@
 #
 # An `.env` anywhere else (the repo root, for example) is NOT read.
 
+# Shared OpenTelemetry settings for the three Node services. Each service merges
+# this block with `<<: *otel-node` and adds its own OTEL_SERVICE_NAME.
+#
+# NODE_OPTIONS loads the OpenTelemetry auto-instrumentation before the app's own
+# code, so HTTP servers, HTTP clients and Express routes are traced without any
+# changes to index.js.
+x-otel-node: &otel-node
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_TRACES_EXPORTER: otlp
+  OTEL_METRICS_EXPORTER: otlp
+  OTEL_LOGS_EXPORTER: otlp
+  OTEL_RESOURCE_ATTRIBUTES: service.namespace=pizza-app,service.version=1.0.0
+  OTEL_NODE_RESOURCE_DETECTORS: env,host,os,process,serviceinstance,container
+  OTEL_NODE_DISABLED_INSTRUMENTATIONS: fs,dns,net
+  NODE_OPTIONS: --require @opentelemetry/auto-instrumentations-node/register --require /app/otel-console-logs.js
+
 services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.161.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    environment:
+      - DASH0_ENDPOINT=${DASH0_ENDPOINT:-https://ingress.us-west-2.aws.dash0.com:4317}
+      - DASH0_AUTH_TOKEN=${DASH0_AUTH_TOKEN:-}
+      - DASH0_ENVIRONMENT=${DASH0_ENVIRONMENT:-workshop}
+      - VCS_REPOSITORY_URL=${VCS_REPOSITORY_URL:-https://github.com/dash0hq/otel-pizza-workshop}
+
   order-service:
     build: ./order-service
     ports:
       - "3000:3000"
     environment:
-      - KITCHEN_SERVICE_URL=http://kitchen-service:3001
-      - DELIVERY_SERVICE_URL=http://delivery-service:3002
+      <<: *otel-node
+      OTEL_SERVICE_NAME: order-service
+      KITCHEN_SERVICE_URL: http://kitchen-service:3001
+      DELIVERY_SERVICE_URL: http://delivery-service:3002
     healthcheck:
       test:
         - CMD
@@ -27,6 +57,8 @@ services:
       retries: 12
       start_period: 5s
     depends_on:
+      otel-collector:
+        condition: service_started
       kitchen-service:
         condition: service_healthy
       delivery-service:
@@ -37,7 +69,9 @@ services:
     ports:
       - "3001:3001"
     environment:
-      - SLOW_KITCHEN=${SLOW_KITCHEN:-false}
+      <<: *otel-node
+      OTEL_SERVICE_NAME: kitchen-service
+      SLOW_KITCHEN: ${SLOW_KITCHEN:-false}
     healthcheck:
       test:
         - CMD
@@ -48,13 +82,18 @@ services:
       timeout: 3s
       retries: 12
       start_period: 5s
+    depends_on:
+      otel-collector:
+        condition: service_started
 
   delivery-service:
     build: ./delivery-service
     ports:
       - "3002:3002"
     environment:
-      - NO_DRIVERS=${NO_DRIVERS:-false}
+      <<: *otel-node
+      OTEL_SERVICE_NAME: delivery-service
+      NO_DRIVERS: ${NO_DRIVERS:-false}
     healthcheck:
       test:
         - CMD
@@ -65,11 +104,23 @@ services:
       timeout: 3s
       retries: 12
       start_period: 5s
+    depends_on:
+      otel-collector:
+        condition: service_started
 
   frontend:
     build: ./frontend
     ports:
       - "8080:80"
+    environment:
+      # Injected into index.html when the container starts. The browser sends
+      # its telemetry straight to Dash0, so this token ends up in the page -
+      # use a separate ingest-only token for it (DASH0_WEB_AUTH_TOKEN).
+      - DASH0_ENDPOINT=${DASH0_ENDPOINT:-}
+      - DASH0_AUTH_TOKEN=${DASH0_AUTH_TOKEN:-}
+      - DASH0_WEB_ENDPOINT=${DASH0_WEB_ENDPOINT:-}
+      - DASH0_WEB_AUTH_TOKEN=${DASH0_WEB_AUTH_TOKEN:-}
+      - DASH0_ENVIRONMENT=${DASH0_ENVIRONMENT:-workshop}
     depends_on:
       order-service:
         condition: service_healthy

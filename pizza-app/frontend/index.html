@@ -8,75 +8,6 @@
          Set it explicitly if the Order Service is not on the machine serving this page,
          e.g. content="https://my-vm.example.com:3000" -->
     <meta name="order-api-url" content="">
-
-    <!-- Order Service base URL, in priority order:
-           1. ?api=... in this page's query string   (quick override, no rebuild)
-           2. window.ORDER_API_URL                   (set it from an injected script)
-           3. <meta name="order-api-url" content>    (edit index.html / bake into the image)
-           4. same host as this page, port 3000      (works on localhost AND on a VM/Codespace)
-         Resolved here in <head> because the Dash0 Web SDK needs it to know which
-         cross-origin requests should carry a `traceparent` header. -->
-    <script>
-        window.ORDER_API_URL = (
-            new URLSearchParams(window.location.search).get('api')
-            || window.ORDER_API_URL
-            || document.querySelector('meta[name="order-api-url"]').content
-            || `${window.location.protocol}//${window.location.hostname}:3000`
-        ).replace(/\/+$/, '');
-    </script>
-
-    <!-- Dash0 Website Monitoring: page views, web vitals, browser errors and the
-         fetch call to the Order Service, linked to the backend trace it starts.
-         The values below are injected from pizza-app/.env when the container
-         starts, see frontend/docker-entrypoint.d/40-dash0-web-config.sh -->
-    <script>
-        window.DASH0_WEB_CONFIG = {
-            endpoint: '__DASH0_WEB_ENDPOINT__',
-            authToken: '__DASH0_WEB_AUTH_TOKEN__',
-            environment: '__DASH0_ENVIRONMENT__'
-        };
-
-        (function () {
-            const config = window.DASH0_WEB_CONFIG;
-            if (!config.endpoint || !config.authToken) {
-                console.log('Dash0: no endpoint/token configured, website monitoring disabled');
-                return;
-            }
-
-            (function (d, a, s, h, z, e, r, o) {
-                d[a] ||
-                    ((z = d[a] =
-                        function () {
-                            h.push(arguments);
-                        }),
-                    (z._t = new Date()),
-                    (z._v = 1),
-                    (h = z._q = []));
-            })(window, 'dash0');
-
-            const apiUrl = window.ORDER_API_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-            dash0('init', {
-                serviceName: 'pizza-frontend',
-                serviceNamespace: 'pizza-app',
-                environment: config.environment,
-                endpoint: {
-                    url: config.endpoint,
-                    authToken: config.authToken
-                },
-                propagators: [
-                    { type: 'traceparent', match: [new RegExp('^' + apiUrl)] }
-                ]
-            });
-
-            const script = document.createElement('script');
-            script.src = 'https://unpkg.com/@dash0/sdk-web@0.27.0/dist/dash0.iife.js';
-            script.defer = true;
-            script.crossOrigin = 'anonymous';
-            document.head.appendChild(script);
-        })();
-    </script>
-
     <style>
         * {
             margin: 0;
@@ -279,8 +210,17 @@
     </div>
     
     <script>
-        // Resolved in <head>, see the comment there.
-        const ORDER_API_URL = window.ORDER_API_URL;
+        // Order Service base URL, in priority order:
+        //   1. ?api=... in this page's query string   (quick override, no rebuild)
+        //   2. window.ORDER_API_URL                   (set it from an injected script)
+        //   3. <meta name="order-api-url" content>    (edit index.html / bake into the image)
+        //   4. same host as this page, port 3000      (works on localhost AND on a VM/Codespace)
+        const ORDER_API_URL = (
+            new URLSearchParams(window.location.search).get('api')
+            || window.ORDER_API_URL
+            || document.querySelector('meta[name="order-api-url"]').content
+            || `${window.location.protocol}//${window.location.hostname}:3000`
+        ).replace(/\/+$/, '');
         console.log('Order Service:', ORDER_API_URL);
 
         const form = document.getElementById('orderForm');
